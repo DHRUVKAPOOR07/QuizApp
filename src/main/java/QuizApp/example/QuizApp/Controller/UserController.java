@@ -1,0 +1,55 @@
+package QuizApp.example.QuizApp.Controller;
+
+import java.util.Optional;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+
+import QuizApp.example.QuizApp.Dao.UserDao;
+import QuizApp.example.QuizApp.Model.User;
+import QuizApp.example.QuizApp.Repository.UserRepository;
+import lombok.extern.slf4j.Slf4j;
+@RestController
+@RequestMapping("/api/user")
+@Slf4j
+public class UserController {
+    @Autowired
+    private PasswordEncoder passwordEncoder;
+    @Autowired
+    private UserRepository userRepository;
+    @PostMapping("/createUser")
+    public ResponseEntity<?> createUser(@RequestBody UserDao user){
+        try {
+            if(user.getEmail()==null || user.getName()==null || user.getPassword()==null|| user.getPhoneNumber()==null){
+                return ResponseEntity.badRequest().body("Fields can't be empty");
+            }
+            
+            Optional<User> existEmail = userRepository.findByEmail(user.getEmail());
+            Optional<User> existPhone = userRepository.findByEmail(user.getPhoneNumber());
+            if(existEmail.isPresent() || existPhone.isPresent()){
+                return ResponseEntity.ok().body("User already exists");
+            }
+            if(user.getPhoneNumber().length()!=10){
+                return ResponseEntity.badRequest().body("Please enter correct phone number");
+
+            }
+            User user1 = new User();
+            user1.setName(user.getName());
+            user1.setEmail(user.getEmail());
+            String hashedPass = passwordEncoder.encode(user.getPassword());
+            user1.setPassword(hashedPass);
+            user1.setPhoneNumber(user.getPhoneNumber());
+            userRepository.save(user1);
+            return ResponseEntity.ok().body("User created successfully");
+        } catch (Exception e) {
+            log.error("Error occured : " + e.getMessage());
+            System.out.println("Error occured : "+e.getMessage());
+            return ResponseEntity.badRequest().body("Error occured = "+e.getMessage());
+        }
+    }
+}
