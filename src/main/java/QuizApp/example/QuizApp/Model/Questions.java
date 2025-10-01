@@ -18,7 +18,7 @@ public class Questions {
     private String id;
     private String questionText;
     private List<String> options;
-    private int correctOption;
+    private String correctOption;
     private int timeLimit;
     
 }

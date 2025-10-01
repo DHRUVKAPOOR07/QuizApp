@@ -11,7 +11,7 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 public class QuestionDao {
     private String questionText;
-    private int correctOption;
+    private String correctOption;
     private List<String> options;
     private int timeLimit;
 }
