@@ -9,7 +9,9 @@ import java.util.UUID;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -208,6 +210,77 @@ public ResponseEntity<?> startquiz(@RequestParam String userId, @RequestParam St
 
     return quizAttemptRepository.save(attempt);
 }
+    @DeleteMapping("/deleteQuiz")
+    public ResponseEntity<?> deleteQuiz(@RequestParam String quizId){
+        try {
+            Optional<Quiz> quiz = quizRepository.findById(quizId);
+            if(!quiz.isPresent()){
+                return ResponseEntity.badRequest().body("Quiz not found");
+            }
+            quizRepository.deleteById(quizId);
+            return ResponseEntity.ok().body("Quiz deleted successfully");
 
+        } catch (Exception e) {
+            log.error("Error occured : "+e.getMessage());
+            return ResponseEntity.badRequest().body("Something went wrong : "+e.getMessage());
+        }
+    }
+    @GetMapping("/attemptedQuiz")
+    public ResponseEntity<?> attemptedQuiz(@RequestParam String userId) {
+    try {
+        Optional<User> userOpt = userRepository.findById(userId);
+        if (!userOpt.isPresent()) {
+            return ResponseEntity.badRequest().body("User not found");
+        }
+
+        User user = userOpt.get();
+        List<String> quizIds = user.getAttemptedQuiz();
+
+        if (quizIds == null || quizIds.isEmpty()) {
+            return ResponseEntity.ok().body("No attempted quizzes found");
+        }
+
+        List<Quiz> attemptedQuizzes = quizRepository.findAllById(quizIds);
+        return ResponseEntity.ok(attemptedQuizzes);
+
+    } catch (Exception e) {
+        log.error("Error occurred : " + e.getMessage());
+        return ResponseEntity.badRequest().body("Something went wrong : " + e.getMessage());
+    }
+}
+    @PutMapping("/updateQuiz")
+    public ResponseEntity<?> updateQuiz(@RequestParam String quizId, @RequestBody QuizDao updatedQuiz){
+        try {
+            Optional<Quiz> quiz = quizRepository.findById(quizId);
+            if(!quiz.isPresent()){
+                return ResponseEntity.badRequest().body("Quiz not found");
+            }
+            quiz.get().setQuizName(updatedQuiz.getQuizName());
+            quiz.get().setDuration(updatedQuiz.getDuration());
+            quiz.get().setPassingScore(updatedQuiz.getPassingScore());
+            quiz.get().setTotalMarks(updatedQuiz.getTotalMarks());
+            quiz.get().setTotalQues(updatedQuiz.getTotalQues());
+            quiz.get().setUpdatedAt(LocalDateTime.now());
+            quizRepository.save(quiz.get());
+            return ResponseEntity.ok().body("Quiz updated successfully");
+            
+        } catch (Exception e) {
+            log.error("Error occured : "+e.getMessage());
+            return ResponseEntity.badRequest().body("Something went wrong : "+e.getMessage());
+        }
+    }
+    @GetMapping("/findQuiz")
+    public ResponseEntity<?> findQuiz(@RequestParam String quizId){
+        try {
+            Optional<Quiz> quiz = quizRepository.findById(quizId);
+            if(!quiz.isPresent()){
+                return ResponseEntity.badRequest().body("Quiz not found");
+            }
+            return ResponseEntity.ok().body(quiz.get());
+        } catch (Exception e) {
+            log.error("Error occured : "+e.getMessage());
+            return ResponseEntity.badRequest().body("Something went wrong : "+e.getMessage());
+        }
+    }
 
 }
