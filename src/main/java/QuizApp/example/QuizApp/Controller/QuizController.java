@@ -8,6 +8,9 @@ import java.util.UUID;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -39,9 +42,12 @@ public class QuizController {
     private UserRepository userRepository;
     @Autowired
     private QuizRepository quizRepository;
+    @PreAuthorize("hasRole('ADMIN')")
     @PostMapping("/createQuiz")
     public ResponseEntity<?> createQuiz(@RequestBody QuizDao quiz){
         try {
+            Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+            String email = authentication.getName();
             Quiz quiz2 = new Quiz();
             quiz2.setQuizName(quiz.getQuizName());
             quiz2.setDuration(quiz.getDuration());
@@ -50,7 +56,7 @@ public class QuizController {
             quiz2.setTotalQues(quiz.getTotalQues());
             quiz2.setActive(true);
             quiz2.setCreatedAt(LocalDateTime.now());
-
+            quiz2.setCreatedBy(email);
             quizRepository.save(quiz2);
             return ResponseEntity.ok().body("Quiz created successfully");
 

@@ -20,4 +20,5 @@ public class User {
     private String password;
     private List<String> top5Quiz;  //id krani hai store
     private List<String> attemptedQuiz;
+    private List<String> roles;
 }

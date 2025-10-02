@@ -28,5 +28,6 @@ public class Quiz {
     private List<String> attempedUsersId;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
+    private String createdBy;
     
 }
