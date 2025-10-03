@@ -9,6 +9,6 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 public class QuestionAttempt {
     private String questionId;
-    private Integer selectedOption; 
+    private String selectedOption; 
     private Boolean correct;
 }

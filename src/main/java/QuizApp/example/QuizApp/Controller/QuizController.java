@@ -130,8 +130,8 @@ public class QuizController {
             return ResponseEntity.badRequest().body("Something went wrong : "+e.getMessage());
         }
     }
-  @PostMapping("/startquiz")
-public ResponseEntity<?> startquiz(@RequestParam String userId, @RequestParam String quizId) {
+    @PostMapping("/startquiz")
+    public ResponseEntity<?> startquiz(@RequestParam String userId, @RequestParam String quizId) {
     try {
       
         Optional<QuizAttempt> existingAttempt = 
@@ -151,9 +151,18 @@ public ResponseEntity<?> startquiz(@RequestParam String userId, @RequestParam St
         quizAttempt.setStatus("IN_PROGRESS");
         quizAttempt.setMarksObtained(0);
         quizAttempt.setAttemptedAt(LocalDateTime.now());
-
+        Optional<Quiz> quiz = quizRepository.findById(quizId);
+        List<String> attemptedUsers = quiz.get().getAttempedUsersId();
+        if (attemptedUsers == null) {
+            attemptedUsers = new ArrayList<>(); 
+            attemptedUsers.add(userId);
+        }
+        else{
+            attemptedUsers.add(userId);
+        }
+        quiz.get().setAttempedUsersId(attemptedUsers);
         QuizAttempt savedAttempt = quizAttemptRepository.save(quizAttempt);
-
+        quizRepository.save(quiz.get());
         return ResponseEntity.ok(savedAttempt);
 
     } catch (Exception e) {
@@ -162,7 +171,7 @@ public ResponseEntity<?> startquiz(@RequestParam String userId, @RequestParam St
     }
 }
     @PostMapping("/saveanswer")
-    public QuizAttempt saveAnswer(String attemptId, String questionId, int selectedOption) {
+    public QuizAttempt saveAnswer(@RequestParam String attemptId,@RequestParam String questionId,@RequestParam String selectedOption) {
     QuizAttempt attempt = quizAttemptRepository.findById(attemptId).orElseThrow();
 
     List<QuestionAttempt> qAttempts = attempt.getAttemptedQuestions();
@@ -185,37 +194,64 @@ public ResponseEntity<?> startquiz(@RequestParam String userId, @RequestParam St
     return quizAttemptRepository.save(attempt);
 }
 
-    @PostMapping("/completequiz")
-    public QuizAttempt completeQuiz(@RequestParam String attemptId) {
-    QuizAttempt attempt = quizAttemptRepository.findById(attemptId).orElseThrow();
+   @PostMapping("/completequiz")
+public ResponseEntity<?> completeQuiz(@RequestParam String attemptId) {
+    QuizAttempt attempt = quizAttemptRepository.findById(attemptId)
+            .orElseThrow(() -> new RuntimeException("Attempt not found"));
+
+   
+    if ("COMPLETED".equalsIgnoreCase(attempt.getStatus())) {
+        return ResponseEntity.badRequest().body("Quiz already completed");
+    }
+
     String quizId = attempt.getQuizId();
+    String userId = attempt.getUserId();
+    Optional<User> user = userRepository.findById(userId);
     Optional<Quiz> quiz = quizRepository.findById(quizId);
+
+    if (!quiz.isPresent()) {
+        return ResponseEntity.badRequest().body("Quiz not found");
+    }
+
     List<Questions> actualQuestions = quiz.get().getQuestions();
     int marks = 0;
+
     for (QuestionAttempt qa : attempt.getAttemptedQuestions()) {
-      Questions actualQ = actualQuestions.stream()
-                        .filter(q -> q.getId().equals(qa.getQuestionId()))
-                        .findFirst()
-                        .orElse(null);
+        Questions actualQ = actualQuestions.stream()
+                .filter(q -> q.getId().equals(qa.getQuestionId()))
+                .findFirst()
+                .orElse(null);
 
-    if (actualQ != null) {
-  
-    if (qa.getSelectedOption() != null 
-        && qa.getSelectedOption().equals(actualQ.getCorrectOption())) {
-        marks++;
-        qa.setCorrect(true);
-    } else {
-        qa.setCorrect(false);
+        if (actualQ != null) {
+            if (qa.getSelectedOption() != null 
+                && qa.getSelectedOption().equals(actualQ.getCorrectOption())) {
+                marks++;
+                qa.setCorrect(true);
+            } else {
+                qa.setCorrect(false);
+            }
+        }
     }
-}
-
+    if(marks>=quiz.get().getPassingScore()){
+        attempt.setResult("PASS");
     }
-
+    else{
+        attempt.setResult("FAIL");
+    }
     attempt.setMarksObtained(marks);
     attempt.setStatus("COMPLETED");
-
-    return quizAttemptRepository.save(attempt);
+    attempt.setSubmittedAt(LocalDateTime.now());
+    List<String> quizes = user.get().getAttemptedQuiz();
+    if(quizes==null){
+        quizes=new ArrayList<>();
+    }
+    quizes.add(quizId);
+    user.get().setAttemptedQuiz(quizes);
+    userRepository.save(user.get());
+    quizAttemptRepository.save(attempt);
+    return ResponseEntity.ok(attempt);
 }
+
     @DeleteMapping("/deleteQuiz")
     public ResponseEntity<?> deleteQuiz(@RequestParam String quizId){
         try {
