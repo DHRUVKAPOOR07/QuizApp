@@ -158,7 +158,7 @@ public class QuizController {
         quizAttempt.setMarksObtained(0);
         quizAttempt.setAttemptedAt(LocalDateTime.now());
         Optional<Quiz> quiz = quizRepository.findById(quizId);
-        List<String> attemptedUsers = quiz.get().getAttempedUsersId();
+        List<String> attemptedUsers = quiz.get().getAttemptedUsersId();
         if (attemptedUsers == null) {
             attemptedUsers = new ArrayList<>(); 
             attemptedUsers.add(userId);
@@ -166,7 +166,7 @@ public class QuizController {
         else{
             attemptedUsers.add(userId);
         }
-        quiz.get().setAttempedUsersId(attemptedUsers);
+        quiz.get().setAttemptedUsersId(attemptedUsers);
         QuizAttempt savedAttempt = quizAttemptRepository.save(quizAttempt);
         quizRepository.save(quiz.get());
         return ResponseEntity.ok(savedAttempt);

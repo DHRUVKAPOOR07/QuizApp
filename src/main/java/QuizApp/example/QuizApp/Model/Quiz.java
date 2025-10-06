@@ -25,7 +25,7 @@ public class Quiz {
     private int passingScore;
     private boolean active;
     private List<Questions> questions;
-    private List<String> attempedUsersId;
+    private List<String> attemptedUsersId;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
     private String createdBy;
