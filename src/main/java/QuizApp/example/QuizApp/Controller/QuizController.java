@@ -222,7 +222,29 @@ public ResponseEntity<Map<String, Object>> saveAnswer(
         return ResponseEntity.status(500).body(response);
     }
 }
+    @PostMapping("/disturbanceDetected")
+    public ResponseEntity<?> disturbanceDetected(@RequestParam String attemptId){
+        try {
+            Map<String, Object> map = new HashMap<>();
+            Optional<QuizAttempt> attempt = quizAttemptRepository.findById(attemptId);
+            int totalDisturbance = attempt.get().getTotalDisturbance();
+            int updatedDisturbance = totalDisturbance+=1;
+            attempt.get().setTotalDisturbance(updatedDisturbance);
+            if(updatedDisturbance>=5){
+                completeQuiz(attemptId);
+                // map.put("DisturbanceMessage", "Quiz completed")
+                return ResponseEntity.ok("Quiz completed successfully");
+            }
+            quizAttemptRepository.save(attempt.get());
 
+            map.put("Message", "You have only : " + (5 - totalDisturbance) + "attempts.");
+            return ResponseEntity.ok(map);
+
+        } catch (Exception e) {
+            log.error("Error occured : "+e.getMessage());
+            return ResponseEntity.badRequest().body("Something went wrong : "+e.getMessage());
+        }
+    }
 
    @PostMapping("/completequiz")
 public ResponseEntity<?> completeQuiz(@RequestParam String attemptId) {
