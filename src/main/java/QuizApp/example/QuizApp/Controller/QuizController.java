@@ -231,6 +231,7 @@ public ResponseEntity<Map<String, Object>> saveAnswer(
             int updatedDisturbance = totalDisturbance+=1;
             attempt.get().setTotalDisturbance(updatedDisturbance);
             if(updatedDisturbance>=5){
+                quizAttemptRepository.save(attempt.get());
                 completeQuiz(attemptId);
                 // map.put("DisturbanceMessage", "Quiz completed")
                 return ResponseEntity.ok("Quiz completed successfully");
