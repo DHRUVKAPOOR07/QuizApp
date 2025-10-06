@@ -2,7 +2,9 @@ package QuizApp.example.QuizApp.Controller;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -42,10 +44,10 @@ public class QuizController {
     private UserRepository userRepository;
     @Autowired
     private QuizRepository quizRepository;
-    @PreAuthorize("hasRole('ADMIN')")
     @PostMapping("/createQuiz")
     public ResponseEntity<?> createQuiz(@RequestBody QuizDao quiz){
         try {
+            Map<String, Object> map = new HashMap<>();
             Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
             String email = authentication.getName();
             Quiz quiz2 = new Quiz();
@@ -58,7 +60,8 @@ public class QuizController {
             quiz2.setCreatedAt(LocalDateTime.now());
             quiz2.setCreatedBy(email);
             quizRepository.save(quiz2);
-            return ResponseEntity.ok().body("Quiz created successfully");
+            map.put("Message","Quiz created successfully");
+            return ResponseEntity.ok().body(map);
 
         } catch (Exception e) {
             log.error("Error occured : "+e.getMessage());
@@ -72,6 +75,7 @@ public class QuizController {
         if (quizId == null) {
             return ResponseEntity.badRequest().body("Please enter quiz");
         }
+        Map<String, Object> map = new HashMap<>();
 
         Optional<Quiz> quizOpt = quizRepository.findById(quizId);
         if (!quizOpt.isPresent()) {
@@ -97,8 +101,8 @@ public class QuizController {
 
         quiz.setQuestions(existingQuestions);
         quizRepository.save(quiz);
-
-        return ResponseEntity.ok().body("Question added successfully");
+        map.put("Message","Question added successfully");
+        return ResponseEntity.ok().body(map);
 
     } catch (Exception e) {
         log.error("Error occurred : " + e.getMessage());
@@ -109,6 +113,7 @@ public class QuizController {
     public ResponseEntity<?> deleteQues(@RequestParam String quizId,@RequestParam String quesId){
         try {
             Optional<Quiz> quiz = quizRepository.findById(quizId);
+            Map<String, Object> map = new HashMap<>();
             if(!quiz.isPresent()){
                 return ResponseEntity.badRequest().body("Either quiz was expired or not found");
             }
@@ -123,7 +128,8 @@ public class QuizController {
             }
             quiz.get().setQuestions(li);
             quizRepository.save(quiz.get());
-            return ResponseEntity.ok().body("Question deleted successfully");
+            map.put("Message", "Question deleted successfully");
+            return ResponseEntity.ok().body(map);
 
         } catch (Exception e) {
             log.error("Error occured : "+e.getMessage());
@@ -170,32 +176,58 @@ public class QuizController {
         return ResponseEntity.badRequest().body("Something went wrong: " + e.getMessage());
     }
 }
-    @PostMapping("/saveanswer")
-    public QuizAttempt saveAnswer(@RequestParam String attemptId,@RequestParam String questionId,@RequestParam String selectedOption) {
-    QuizAttempt attempt = quizAttemptRepository.findById(attemptId).orElseThrow();
+   @PostMapping("/saveanswer")
+public ResponseEntity<Map<String, Object>> saveAnswer(
+        @RequestParam String attemptId,
+        @RequestParam String questionId,
+        @RequestParam String selectedOption) {
 
-    List<QuestionAttempt> qAttempts = attempt.getAttemptedQuestions();
-    QuestionAttempt existing = qAttempts.stream()
-        .filter(q -> q.getQuestionId().equals(questionId))
-        .findFirst()
-        .orElse(null);
+    Map<String, Object> response = new HashMap<>();
 
-    if (existing != null) {
-        existing.setSelectedOption(selectedOption);
+    try {
+        QuizAttempt attempt = quizAttemptRepository.findById(attemptId)
+                .orElseThrow(() -> new RuntimeException("Quiz attempt not found"));
 
-    } else {
-        QuestionAttempt newQ = new QuestionAttempt();
-        newQ.setQuestionId(questionId);
-        newQ.setSelectedOption(selectedOption);
-        qAttempts.add(newQ);
+        List<QuestionAttempt> qAttempts = attempt.getAttemptedQuestions();
+        if (qAttempts == null) {
+            qAttempts = new ArrayList<>();
+        }
+
+        QuestionAttempt existing = qAttempts.stream()
+                .filter(q -> q.getQuestionId().equals(questionId))
+                .findFirst()
+                .orElse(null);
+
+        if (existing != null) {
+            existing.setSelectedOption(selectedOption);
+        } else {
+            QuestionAttempt newQ = new QuestionAttempt();
+            newQ.setQuestionId(questionId);
+            newQ.setSelectedOption(selectedOption);
+            qAttempts.add(newQ);
+        }
+
+        attempt.setAttemptedQuestions(qAttempts);
+        QuizAttempt updatedAttempt = quizAttemptRepository.save(attempt);
+
+        response.put("status", "success");
+        response.put("message", "Answer submitted successfully");
+        response.put("attempt", updatedAttempt);
+
+        return ResponseEntity.ok(response);
+
+    } catch (Exception e) {
+        response.put("status", "error");
+        response.put("message", "Something went wrong: " + e.getMessage());
+        return ResponseEntity.status(500).body(response);
     }
-
-    attempt.setAttemptedQuestions(qAttempts);
-    return quizAttemptRepository.save(attempt);
 }
+
 
    @PostMapping("/completequiz")
 public ResponseEntity<?> completeQuiz(@RequestParam String attemptId) {
+    try {
+        Map<String, Object> map = new HashMap<>();
     QuizAttempt attempt = quizAttemptRepository.findById(attemptId)
             .orElseThrow(() -> new RuntimeException("Attempt not found"));
 
@@ -249,18 +281,25 @@ public ResponseEntity<?> completeQuiz(@RequestParam String attemptId) {
     user.get().setAttemptedQuiz(quizes);
     userRepository.save(user.get());
     quizAttemptRepository.save(attempt);
-    return ResponseEntity.ok(attempt);
+    map.put("Message", attempt);
+    return ResponseEntity.ok(map);
+    } catch (Exception e) {
+        log.error("Error occured : ", e.getMessage());
+        return ResponseEntity.badRequest().body("Error occured : "+e.getMessage());
+    }
 }
 
     @DeleteMapping("/deleteQuiz")
     public ResponseEntity<?> deleteQuiz(@RequestParam String quizId){
         try {
             Optional<Quiz> quiz = quizRepository.findById(quizId);
+            Map<String, Object> map = new HashMap<>();
             if(!quiz.isPresent()){
                 return ResponseEntity.badRequest().body("Quiz not found");
             }
             quizRepository.deleteById(quizId);
-            return ResponseEntity.ok().body("Quiz deleted successfully");
+            map.put("Message", "Quiz deleted successfully");
+            return ResponseEntity.ok().body(map);
 
         } catch (Exception e) {
             log.error("Error occured : "+e.getMessage());
@@ -271,6 +310,7 @@ public ResponseEntity<?> completeQuiz(@RequestParam String attemptId) {
     public ResponseEntity<?> attemptedQuiz(@RequestParam String userId) {
     try {
         Optional<User> userOpt = userRepository.findById(userId);
+        Map<String, Object> map = new HashMap<>();
         if (!userOpt.isPresent()) {
             return ResponseEntity.badRequest().body("User not found");
         }
@@ -279,11 +319,13 @@ public ResponseEntity<?> completeQuiz(@RequestParam String attemptId) {
         List<String> quizIds = user.getAttemptedQuiz();
 
         if (quizIds == null || quizIds.isEmpty()) {
-            return ResponseEntity.ok().body("No attempted quizzes found");
+            map.put("Message", "No attempted quizzes found");
+            return ResponseEntity.ok().body(map);
         }
 
         List<Quiz> attemptedQuizzes = quizRepository.findAllById(quizIds);
-        return ResponseEntity.ok(attemptedQuizzes);
+        map.put("Message", attemptedQuizzes);
+        return ResponseEntity.ok(map);
 
     } catch (Exception e) {
         log.error("Error occurred : " + e.getMessage());
@@ -293,9 +335,17 @@ public ResponseEntity<?> completeQuiz(@RequestParam String attemptId) {
     @PutMapping("/updateQuiz")
     public ResponseEntity<?> updateQuiz(@RequestParam String quizId, @RequestBody QuizDao updatedQuiz){
         try {
+            Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+            String email = authentication.getName();
+            Map<String, Object> map = new HashMap<>();
             Optional<Quiz> quiz = quizRepository.findById(quizId);
             if(!quiz.isPresent()){
-                return ResponseEntity.badRequest().body("Quiz not found");
+                map.put("Message", "Quiz not found");
+                return ResponseEntity.badRequest().body(map);
+            }
+            if(!email.equals(quiz.get().getCreatedBy())){
+                map.put("Message", "You cannot update this quiz because you are not its creator.");
+                return ResponseEntity.badRequest().body(map);
             }
             quiz.get().setQuizName(updatedQuiz.getQuizName());
             quiz.get().setDuration(updatedQuiz.getDuration());
@@ -304,7 +354,9 @@ public ResponseEntity<?> completeQuiz(@RequestParam String attemptId) {
             quiz.get().setTotalQues(updatedQuiz.getTotalQues());
             quiz.get().setUpdatedAt(LocalDateTime.now());
             quizRepository.save(quiz.get());
-            return ResponseEntity.ok().body("Quiz updated successfully");
+            
+            map.put("Message", "Quiz updated successfully");
+            return ResponseEntity.ok().body(map);
             
         } catch (Exception e) {
             log.error("Error occured : "+e.getMessage());
@@ -314,11 +366,14 @@ public ResponseEntity<?> completeQuiz(@RequestParam String attemptId) {
     @GetMapping("/findQuiz")
     public ResponseEntity<?> findQuiz(@RequestParam String quizId){
         try {
+            Map<String, Object> map = new HashMap<>();
             Optional<Quiz> quiz = quizRepository.findById(quizId);
             if(!quiz.isPresent()){
-                return ResponseEntity.badRequest().body("Quiz not found");
+                map.put("Message", "Quiz not found");
+                return ResponseEntity.badRequest().body(map);
             }
-            return ResponseEntity.ok().body(quiz.get());
+            map.put("Message", quiz.get());
+            return ResponseEntity.ok().body(map);
         } catch (Exception e) {
             log.error("Error occured : "+e.getMessage());
             return ResponseEntity.badRequest().body("Something went wrong : "+e.getMessage());

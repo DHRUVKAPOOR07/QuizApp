@@ -1,7 +1,9 @@
 package QuizApp.example.QuizApp.Controller;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 import org.springframework.beans.factory.annotation.Autowired;
@@ -31,17 +33,21 @@ public class UserController {
     @PostMapping("/createUser")
     public ResponseEntity<?> createUser(@RequestBody UserDao user){
         try {
+            Map<String, Object> map = new HashMap<>();
             if(user.getEmail()==null || user.getName()==null || user.getPassword()==null|| user.getPhoneNumber()==null){
-                return ResponseEntity.badRequest().body("Fields can't be empty");
+                map.put("Message", "Fields can't be empty");
+                return ResponseEntity.badRequest().body(map);
             }
             
             Optional<User> existEmail = userRepository.findByEmail(user.getEmail());
             Optional<User> existPhone = userRepository.findByEmail(user.getPhoneNumber());
             if(existEmail.isPresent() || existPhone.isPresent()){
-                return ResponseEntity.ok().body("User already exists");
+                map.put("Message", "User already exists");
+                return ResponseEntity.ok().body(map);
             }
             if(user.getPhoneNumber().length()!=10){
-                return ResponseEntity.badRequest().body("Please enter correct phone number");
+                map.put("Message", "Please enter correct phone number");
+                return ResponseEntity.badRequest().body(map);
 
             }
             User user1 = new User();
@@ -55,7 +61,8 @@ public class UserController {
             user1.setRoles(li);
 
             userRepository.save(user1);
-            return ResponseEntity.ok().body("User created successfully");
+            map.put("Message", "User created successfully");
+            return ResponseEntity.ok().body(map);
         } catch (Exception e) {
             log.error("Error occured : " + e.getMessage());
             System.out.println("Error occured : "+e.getMessage());
@@ -65,15 +72,20 @@ public class UserController {
     @PostMapping("/login")
     public ResponseEntity<?> login(@RequestBody UserLoginDao userLoginDao){
         try {
+            Map<String, Object> map = new HashMap<>();
             Optional<User> user = userRepository.findByEmail(userLoginDao.getEmail());
             if(!user.isPresent()){
-                return ResponseEntity.badRequest().body("User not found. Please enter valid credentials");
+                map.put("Message", "User not found. Please enter valid credentials");
+                return ResponseEntity.badRequest().body(map);
             }
             if(!(passwordEncoder.matches(userLoginDao.getPassword(), user.get().getPassword()))){
-                return ResponseEntity.badRequest().body("Invalid username or password");
+                map.put("Message", "Invalid username or password");
+                return ResponseEntity.badRequest().body(map);
             }
             String token = jwtUtil.generateToken(userLoginDao.getEmail(), "USER", userLoginDao.getEmail());
-            return ResponseEntity.ok().body("Login successfull"+"\n"+token);
+            map.put("Token", token);
+            map.put("Message", "Login successfull");
+            return ResponseEntity.ok().body(map);
         } catch (Exception e) {
             log.error("Error occured : "+e.getMessage());
             return ResponseEntity.badRequest().body("Something went wrong : "+e.getMessage());
