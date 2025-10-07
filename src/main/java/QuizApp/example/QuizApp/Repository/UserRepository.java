@@ -10,5 +10,4 @@ import QuizApp.example.QuizApp.Model.User;
 @Repository
 public interface UserRepository extends MongoRepository<User,String>{
     Optional<User> findByEmail(String email);
-    Optional<User> findByphoneNumber(String phoneNumber);
 }

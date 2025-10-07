@@ -1,6 +1,7 @@
 package QuizApp.example.QuizApp.Model;
 
 import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.util.List;
 
 import org.hibernate.validator.constraints.ru.INN;
@@ -20,14 +21,18 @@ public class Quiz {
     private String id;
     private String quizName;
     private double duration;
-    private int totalQues;
+    private String description;
+    private int totalQuestions;
     private int totalMarks;
     private int passingScore;
+    private double passingPercentage;
     private boolean active;
     private List<Questions> questions;
     private List<String> attemptedUsersId;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
     private String createdBy;
-    
+    private LocalDateTime quizDate;
+    private LocalTime startTime;
+    private LocalTime endTime;
 }

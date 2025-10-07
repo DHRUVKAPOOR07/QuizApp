@@ -14,9 +14,8 @@ import lombok.NoArgsConstructor;
 @Document(collection = "user")
 public class User {
     private String id;
-    private String name;
+    private String username;
     private String email;
-    private String phoneNumber;
     private String password;
     private List<String> top5Quiz;  //id krani hai store
     private List<String> attemptedQuiz;

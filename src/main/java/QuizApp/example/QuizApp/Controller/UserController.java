@@ -9,10 +9,7 @@ import java.util.Optional;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.crypto.password.PasswordEncoder;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 import QuizApp.example.QuizApp.Dao.UserDao;
 import QuizApp.example.QuizApp.Dao.UserLoginDao;
@@ -23,39 +20,36 @@ import lombok.extern.slf4j.Slf4j;
 @RestController
 @RequestMapping("/api/user")
 @Slf4j
+@CrossOrigin(origins = "http://localhost:5173")
 public class UserController {
+
     @Autowired
     private JwtUtil jwtUtil;
     @Autowired
     private PasswordEncoder passwordEncoder;
     @Autowired
     private UserRepository userRepository;
+
     @PostMapping("/createUser")
     public ResponseEntity<?> createUser(@RequestBody UserDao user){
         try {
             Map<String, Object> map = new HashMap<>();
-            if(user.getEmail()==null || user.getName()==null || user.getPassword()==null|| user.getPhoneNumber()==null){
+            if(user.getEmail()==null || user.getUsername()==null || user.getPassword()==null){
                 map.put("Message", "Fields can't be empty");
                 return ResponseEntity.badRequest().body(map);
             }
             
             Optional<User> existEmail = userRepository.findByEmail(user.getEmail());
-            Optional<User> existPhone = userRepository.findByEmail(user.getPhoneNumber());
-            if(existEmail.isPresent() || existPhone.isPresent()){
+            if(existEmail.isPresent()){
                 map.put("Message", "User already exists");
                 return ResponseEntity.ok().body(map);
             }
-            if(user.getPhoneNumber().length()!=10){
-                map.put("Message", "Please enter correct phone number");
-                return ResponseEntity.badRequest().body(map);
 
-            }
             User user1 = new User();
-            user1.setName(user.getName());
+            user1.setUsername(user.getUsername());
             user1.setEmail(user.getEmail());
             String hashedPass = passwordEncoder.encode(user.getPassword());
             user1.setPassword(hashedPass);
-            user1.setPhoneNumber(user.getPhoneNumber());
             List<String> li = new ArrayList<>();
             li.add("ROLE_USER");
             user1.setRoles(li);
@@ -69,6 +63,8 @@ public class UserController {
             return ResponseEntity.badRequest().body("Error occured = "+e.getMessage());
         }
     }
+
+
     @PostMapping("/login")
     public ResponseEntity<?> login(@RequestBody UserLoginDao userLoginDao){
         try {
@@ -82,9 +78,10 @@ public class UserController {
                 map.put("Message", "Invalid username or password");
                 return ResponseEntity.badRequest().body(map);
             }
-            String token = jwtUtil.generateToken(userLoginDao.getEmail(), "USER", userLoginDao.getEmail());
-            map.put("Token", token);
-            map.put("Message", "Login successfull");
+            String token = jwtUtil.generateToken(userLoginDao.getEmail(), "USER", userLoginDao.getEmail(),user.get().getId());
+            map.put("token", token);
+            map.put("message", "Login successfull");
+            map.put("username",user.get().getUsername());
             return ResponseEntity.ok().body(map);
         } catch (Exception e) {
             log.error("Error occured : "+e.getMessage());
