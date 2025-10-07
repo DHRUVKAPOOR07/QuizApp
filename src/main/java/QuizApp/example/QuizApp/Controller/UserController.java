@@ -42,7 +42,7 @@ public class UserController {
             Optional<User> existEmail = userRepository.findByEmail(user.getEmail());
             if(existEmail.isPresent()){
                 map.put("Message", "User already exists");
-                return ResponseEntity.ok().body(map);
+                return ResponseEntity.status(406).body(map);
             }
 
             User user1 = new User();
@@ -60,7 +60,7 @@ public class UserController {
         } catch (Exception e) {
             log.error("Error occured : " + e.getMessage());
             System.out.println("Error occured : "+e.getMessage());
-            return ResponseEntity.badRequest().body("Error occured = "+e.getMessage());
+            return ResponseEntity.status(500).body("Error occured = "+e.getMessage());
         }
     }
 
@@ -72,11 +72,11 @@ public class UserController {
             Optional<User> user = userRepository.findByEmail(userLoginDao.getEmail());
             if(!user.isPresent()){
                 map.put("Message", "User not found. Please enter valid credentials");
-                return ResponseEntity.badRequest().body(map);
+                return ResponseEntity.status(404).body(map);
             }
             if(!(passwordEncoder.matches(userLoginDao.getPassword(), user.get().getPassword()))){
                 map.put("Message", "Invalid username or password");
-                return ResponseEntity.badRequest().body(map);
+                return ResponseEntity.status(401).body(map);
             }
             String token = jwtUtil.generateToken(userLoginDao.getEmail(), "USER", userLoginDao.getEmail(),user.get().getId());
             map.put("token", token);
@@ -85,7 +85,7 @@ public class UserController {
             return ResponseEntity.ok().body(map);
         } catch (Exception e) {
             log.error("Error occured : "+e.getMessage());
-            return ResponseEntity.badRequest().body("Something went wrong : "+e.getMessage());
+            return ResponseEntity.status(500).body("Something went wrong : "+e.getMessage());
         }
     }
 }

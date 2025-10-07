@@ -64,7 +64,7 @@ public class QuizController {
             LocalDateTime quizStart = LocalDateTime.of(quiz.getQuizDate().toLocalDate(), quiz.getStartTime());
             if (quizStart.isBefore(now)) {
                 map.put("Message", "Quiz start time must be in the future");
-                return ResponseEntity.badRequest().body(map);
+                return ResponseEntity.status(406).body(map);
             }
 
             // Optional: validate endTime > startTime
@@ -72,7 +72,7 @@ public class QuizController {
                 LocalDateTime quizEnd = LocalDateTime.of(quiz.getQuizDate().toLocalDate(), quiz.getEndTime());
                 if (!quizEnd.isAfter(quizStart)) {
                     map.put("Message", "Quiz end time must be after start time");
-                    return ResponseEntity.badRequest().body(map);
+                    return ResponseEntity.status(406).body(map);
                 }
             }
 
@@ -100,13 +100,13 @@ public class QuizController {
 
         } catch (Exception e) {
             log.error("Error occured : " + e.getMessage());
-            return ResponseEntity.badRequest().body("Error occured : " + e.getMessage());
+            return ResponseEntity.status(500).body("Error occured : " + e.getMessage());
         }
     }
 
     @GetMapping("/myquizzes")
     public ResponseEntity<?> getMyQuizzes(@RequestHeader("Authorization") String authHeader) {
-        try {
+        try {            
             Map<String, Object> map = new HashMap<>();
 
             if (authHeader == null || !authHeader.startsWith("Bearer ")) {
@@ -126,7 +126,7 @@ public class QuizController {
         } catch (Exception e) {
             Map<String, Object> map = new HashMap<>();
             map.put("Message", "Something went wrong: " + e.getMessage());
-            return ResponseEntity.badRequest().body(map);
+            return ResponseEntity.status(500).body(map);
         }
     }
 
@@ -151,7 +151,7 @@ public class QuizController {
             Optional<Quiz> quizOpt = quizRepository.findById(quizId);
             if (!quizOpt.isPresent()) {
                 map.put("Message", "Quiz not found");
-                return ResponseEntity.badRequest().body(map);
+                return ResponseEntity.status(404).body(map);
             }
 
             Quiz quiz = quizOpt.get();
@@ -169,7 +169,7 @@ public class QuizController {
         } catch (Exception e) {
             Map<String, Object> map = new HashMap<>();
             map.put("Message", "Something went wrong: " + e.getMessage());
-            return ResponseEntity.badRequest().body(map);
+            return ResponseEntity.status(500).body(map);
         }
     }
 
@@ -198,7 +198,7 @@ public class QuizController {
 
             Optional<Quiz> quizOpt = quizRepository.findById(quizId);
             if (!quizOpt.isPresent()) {
-                return ResponseEntity.badRequest().body("Either quiz was expired or not found");
+                return ResponseEntity.status(404).body("Either quiz was expired or not found");
             }
 
             Quiz quiz = quizOpt.get();
@@ -217,14 +217,14 @@ public class QuizController {
 
             // Check max limit
             if (existingQuestions.size() >= total) {
-                return ResponseEntity.badRequest().body("You have already reached the max limit of " + total + " questions.");
+                return ResponseEntity.status(406).body("You have already reached the max limit of " + total + " questions.");
             }
 
             // Check if same question already exists
             boolean questionExists = existingQuestions.stream()
                     .anyMatch(q -> q.getQuestionText().equalsIgnoreCase(questionDao.getQuestionText()));
             if (questionExists) {
-                return ResponseEntity.badRequest().body("This question already exists in the quiz.");
+                return ResponseEntity.status(500).body("This question already exists in the quiz.");
             }
 
             // Add new question
@@ -244,7 +244,7 @@ public class QuizController {
 
         } catch (Exception e) {
             log.error("Error occurred : " + e.getMessage());
-            return ResponseEntity.badRequest().body("Error occurred : " + e.getMessage());
+            return ResponseEntity.status(500).body("Error occurred : " + e.getMessage());
         }
     }
 
@@ -258,7 +258,7 @@ public class QuizController {
             Map<String, Object> map = new HashMap<>();
 
             if (quizId == null || questionTextDao.getQuestionText() == null) {
-                return ResponseEntity.badRequest().body("Quiz ID and Question text are required");
+                return ResponseEntity.status(405).body("Quiz ID and Question text are required");
             }
 
             if (authHeader == null || !authHeader.startsWith("Bearer ")) {
@@ -272,7 +272,7 @@ public class QuizController {
 
             Optional<Quiz> quizOpt = quizRepository.findById(quizId);
             if (!quizOpt.isPresent()) {
-                return ResponseEntity.badRequest().body("Quiz not found");
+                return ResponseEntity.status(404).body("Quiz not found");
             }
 
             Quiz quiz = quizOpt.get();
@@ -285,7 +285,7 @@ public class QuizController {
 
             List<Questions> existingQuestions = quiz.getQuestions();
             if (existingQuestions == null || existingQuestions.isEmpty()) {
-                return ResponseEntity.badRequest().body("No questions found in this quiz");
+                return ResponseEntity.status(404).body("No questions found in this quiz");
             }
 
             boolean removed = existingQuestions.removeIf(
@@ -293,7 +293,7 @@ public class QuizController {
             );
 
             if (!removed) {
-                return ResponseEntity.badRequest().body("Question not found in this quiz");
+                return ResponseEntity.status(404).body("Question not found in this quiz");
             }
 
             quiz.setQuestions(existingQuestions);
@@ -304,7 +304,7 @@ public class QuizController {
 
         } catch (Exception e) {
             log.error("Error occurred : " + e.getMessage());
-            return ResponseEntity.badRequest().body("Something went wrong: " + e.getMessage());
+            return ResponseEntity.status(500).body("Something went wrong: " + e.getMessage());
         }
     }
 
@@ -327,7 +327,7 @@ public class QuizController {
             Optional<Quiz> quizOpt = quizRepository.findById(quizId);
             if (!quizOpt.isPresent()) {
                 map.put("Message", "Quiz not found with given ID");
-                return ResponseEntity.badRequest().body(map);
+                return ResponseEntity.status(404).body(map);
             }
 
             Quiz quiz = quizOpt.get();
@@ -335,7 +335,7 @@ public class QuizController {
             // Owner validation
             if (!quiz.getCreatedBy().equals(userId)) {
                 map.put("Message", "You are not authorized to update this quiz");
-                return ResponseEntity.status(403).body(map);
+                return ResponseEntity.status(401).body(map);
             }
 
             // Validation: startTime & endTime must exist first
@@ -344,13 +344,13 @@ public class QuizController {
                 LocalTime end = updatedQuiz.getEndTime();
                 if (end.isBefore(start) || end.equals(start)) {
                     map.put("Message", "End time must be after start time");
-                    return ResponseEntity.badRequest().body(map);
+                    return ResponseEntity.status(405).body(map);
                 }
 
                 long diffMinutes = java.time.Duration.between(start, end).toMinutes();
                 if (updatedQuiz.getDuration() * 60 > diffMinutes) {
                     map.put("Message", "Duration cannot exceed the difference between start and end time");
-                    return ResponseEntity.badRequest().body(map);
+                    return ResponseEntity.status(405).body(map);
                 }
 
                 quiz.setStartTime(start);
@@ -360,13 +360,13 @@ public class QuizController {
                 LocalTime end = quiz.getEndTime();
                 if (end.isBefore(start) || end.equals(start)) {
                     map.put("Message", "Start time cannot be after existing end time");
-                    return ResponseEntity.badRequest().body(map);
+                    return ResponseEntity.status(405).body(map);
                 }
 
                 long diffMinutes = java.time.Duration.between(start, end).toMinutes();
                 if (updatedQuiz.getDuration() * 60 > diffMinutes) {
                     map.put("Message", "Duration cannot exceed the difference between start and end time");
-                    return ResponseEntity.badRequest().body(map);
+                    return ResponseEntity.status(405).body(map);
                 }
 
                 quiz.setStartTime(start);
@@ -375,13 +375,13 @@ public class QuizController {
                 LocalTime end = updatedQuiz.getEndTime();
                 if (end.isBefore(start) || end.equals(start)) {
                     map.put("Message", "End time cannot be before existing start time");
-                    return ResponseEntity.badRequest().body(map);
+                    return ResponseEntity.status(405).body(map);
                 }
 
                 long diffMinutes = java.time.Duration.between(start, end).toMinutes();
                 if (updatedQuiz.getDuration() * 60 > diffMinutes) {
                     map.put("Message", "Duration cannot exceed the difference between start and end time");
-                    return ResponseEntity.badRequest().body(map);
+                    return ResponseEntity.status(405).body(map);
                 }
 
                 quiz.setEndTime(end);
@@ -415,16 +415,9 @@ public class QuizController {
         } catch (Exception e) {
             log.error("Error occurred: " + e.getMessage());
             map.put("Message", "Something went wrong: " + e.getMessage());
-            return ResponseEntity.badRequest().body(map);
+            return ResponseEntity.status(500).body(map);
         }
     }
-
-
-
-
-
-
-
     @PostMapping("/startquiz")
     public ResponseEntity<?> startquiz(@RequestParam String userId, @RequestParam String quizId) {
     try {
@@ -437,7 +430,7 @@ public class QuizController {
             if ("IN_PROGRESS".equals(attempt.getStatus())) {
                 return ResponseEntity.ok(attempt);
             } else if ("COMPLETED".equals(attempt.getStatus())) {
-                return ResponseEntity.badRequest().body("Quiz already submitted. Cannot start again.");
+                return ResponseEntity.status(410).body("Quiz already submitted. Cannot start again.");
             }
         }
         QuizAttempt quizAttempt = new QuizAttempt();
@@ -462,7 +455,7 @@ public class QuizController {
 
     } catch (Exception e) {
         log.error("Error occurred: " + e.getMessage());
-        return ResponseEntity.badRequest().body("Something went wrong: " + e.getMessage());
+        return ResponseEntity.status(500).body("Something went wrong: " + e.getMessage());
     }
 }
 
@@ -533,7 +526,7 @@ public ResponseEntity<Map<String, Object>> saveAnswer(
 
         } catch (Exception e) {
             log.error("Error occured : "+e.getMessage());
-            return ResponseEntity.badRequest().body("Something went wrong : "+e.getMessage());
+            return ResponseEntity.status(500).body("Something went wrong : "+e.getMessage());
         }
     }
 
@@ -546,7 +539,7 @@ public ResponseEntity<?> completeQuiz(@RequestParam String attemptId) {
 
    
     if ("COMPLETED".equalsIgnoreCase(attempt.getStatus())) {
-        return ResponseEntity.badRequest().body("Quiz already completed");
+        return ResponseEntity.status(403).body("Quiz already completed");
     }
 
     String quizId = attempt.getQuizId();
@@ -555,7 +548,7 @@ public ResponseEntity<?> completeQuiz(@RequestParam String attemptId) {
     Optional<Quiz> quiz = quizRepository.findById(quizId);
 
     if (!quiz.isPresent()) {
-        return ResponseEntity.badRequest().body("Quiz not found");
+        return ResponseEntity.status(404).body("Quiz not found");
     }
 
     List<Questions> actualQuestions = quiz.get().getQuestions();
@@ -598,7 +591,7 @@ public ResponseEntity<?> completeQuiz(@RequestParam String attemptId) {
     return ResponseEntity.ok(map);
     } catch (Exception e) {
         log.error("Error occured : ", e.getMessage());
-        return ResponseEntity.badRequest().body("Error occured : "+e.getMessage());
+        return ResponseEntity.status(500).body("Error occured : "+e.getMessage());
     }
 }
 
@@ -608,7 +601,7 @@ public ResponseEntity<?> completeQuiz(@RequestParam String attemptId) {
             Optional<Quiz> quiz = quizRepository.findById(quizId);
             Map<String, Object> map = new HashMap<>();
             if(!quiz.isPresent()){
-                return ResponseEntity.badRequest().body("Quiz not found");
+                return ResponseEntity.status(404).body("Quiz not found");
             }
             quizRepository.deleteById(quizId);
             map.put("Message", "Quiz deleted successfully");
@@ -616,7 +609,7 @@ public ResponseEntity<?> completeQuiz(@RequestParam String attemptId) {
 
         } catch (Exception e) {
             log.error("Error occured : "+e.getMessage());
-            return ResponseEntity.badRequest().body("Something went wrong : "+e.getMessage());
+            return ResponseEntity.status(500).body("Something went wrong : "+e.getMessage());
         }
     }
     @GetMapping("/attemptedQuiz")
@@ -625,7 +618,7 @@ public ResponseEntity<?> completeQuiz(@RequestParam String attemptId) {
         Optional<User> userOpt = userRepository.findById(userId);
         Map<String, Object> map = new HashMap<>();
         if (!userOpt.isPresent()) {
-            return ResponseEntity.badRequest().body("User not found");
+            return ResponseEntity.status(404).body("User not found");
         }
 
         User user = userOpt.get();
@@ -643,7 +636,7 @@ public ResponseEntity<?> completeQuiz(@RequestParam String attemptId) {
 
     } catch (Exception e) {
         log.error("Error occurred : " + e.getMessage());
-        return ResponseEntity.badRequest().body("Something went wrong : " + e.getMessage());
+        return ResponseEntity.status(500).body("Something went wrong : " + e.getMessage());
     }
 }
 
@@ -654,13 +647,13 @@ public ResponseEntity<?> completeQuiz(@RequestParam String attemptId) {
             Optional<Quiz> quiz = quizRepository.findById(quizId);
             if(!quiz.isPresent()){
                 map.put("Message", "Quiz not found");
-                return ResponseEntity.badRequest().body(map);
+                return ResponseEntity.status(404).body(map);
             }
             map.put("Message", quiz.get());
             return ResponseEntity.ok().body(map);
         } catch (Exception e) {
             log.error("Error occured : "+e.getMessage());
-            return ResponseEntity.badRequest().body("Something went wrong : "+e.getMessage());
+            return ResponseEntity.status(500).body("Something went wrong : "+e.getMessage());
         }
     }
 
