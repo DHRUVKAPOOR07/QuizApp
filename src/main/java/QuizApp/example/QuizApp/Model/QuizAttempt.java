@@ -22,6 +22,7 @@ public class QuizAttempt {
     private List<QuestionAttempt> attemptedQuestions = new ArrayList<>();
     private LocalDateTime attemptedAt = LocalDateTime.now();
     private LocalDateTime submittedAt;
+    private int totalDisturbance;
     private String result;
     private String status;
 }

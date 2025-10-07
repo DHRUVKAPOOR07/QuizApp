@@ -447,7 +447,7 @@ public class QuizController {
         quizAttempt.setMarksObtained(0);
         quizAttempt.setAttemptedAt(LocalDateTime.now());
         Optional<Quiz> quiz = quizRepository.findById(quizId);
-        List<String> attemptedUsers = quiz.get().getAttempedUsersId();
+        List<String> attemptedUsers = quiz.get().getAttemptedUsersId();
         if (attemptedUsers == null) {
             attemptedUsers = new ArrayList<>(); 
             attemptedUsers.add(userId);
@@ -455,7 +455,7 @@ public class QuizController {
         else{
             attemptedUsers.add(userId);
         }
-        quiz.get().setAttempedUsersId(attemptedUsers);
+        quiz.get().setAttemptedUsersId(attemptedUsers);
         QuizAttempt savedAttempt = quizAttemptRepository.save(quizAttempt);
         quizRepository.save(quiz.get());
         return ResponseEntity.ok(savedAttempt);
@@ -512,7 +512,30 @@ public ResponseEntity<Map<String, Object>> saveAnswer(
         return ResponseEntity.status(500).body(response);
     }
 }
+    @PostMapping("/disturbanceDetected")
+    public ResponseEntity<?> disturbanceDetected(@RequestParam String attemptId){
+        try {
+            Map<String, Object> map = new HashMap<>();
+            Optional<QuizAttempt> attempt = quizAttemptRepository.findById(attemptId);
+            int totalDisturbance = attempt.get().getTotalDisturbance();
+            int updatedDisturbance = totalDisturbance+=1;
+            attempt.get().setTotalDisturbance(updatedDisturbance);
+            if(updatedDisturbance>=5){
+                quizAttemptRepository.save(attempt.get());
+                completeQuiz(attemptId);
+                // map.put("DisturbanceMessage", "Quiz completed")
+                return ResponseEntity.ok("Quiz completed successfully");
+            }
+            quizAttemptRepository.save(attempt.get());
 
+            map.put("Message", "You have only : " + (5 - totalDisturbance) + "attempts.");
+            return ResponseEntity.ok(map);
+
+        } catch (Exception e) {
+            log.error("Error occured : "+e.getMessage());
+            return ResponseEntity.badRequest().body("Something went wrong : "+e.getMessage());
+        }
+    }
 
    @PostMapping("/completequiz")
 public ResponseEntity<?> completeQuiz(@RequestParam String attemptId) {
