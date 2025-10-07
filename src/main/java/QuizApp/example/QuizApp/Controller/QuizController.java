@@ -1,6 +1,7 @@
 package QuizApp.example.QuizApp.Controller;
 
 import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -79,8 +80,8 @@ public class QuizController {
             quiz2.setQuizName(quiz.getQuizName());
             quiz2.setDuration(quiz.getDuration());
             quiz2.setDescription(quiz.getDescription());
-            quiz2.setTotalQuestion(quiz.getTotalQuestions());
-            quiz2.setPassingScore((int) Math.ceil((quiz.getPassingPercentage()/100) * quiz.getTotalQuestions()));
+            quiz2.setTotalQuestions(quiz.getTotalQuestions());
+            quiz2.setPassingScore((int) Math.ceil((quiz.getPassingPercentage()/100.0) * quiz.getTotalQuestions()));
             quiz2.setPassingPercentage(quiz.getPassingPercentage());
             quiz2.setQuizDate(quiz.getQuizDate());
             quiz2.setStartTime(quiz.getStartTime());
@@ -90,15 +91,19 @@ public class QuizController {
             quiz2.setCreatedBy(userId);
 
             quizRepository.save(quiz2);
-            map.put("message","Quiz created successfully");
-            map.put("status",true);
+
+            map.put("message", "Quiz created successfully");
+            map.put("status", true);
+            map.put("quizId", quiz2.getId());
+
             return ResponseEntity.ok().body(map);
 
         } catch (Exception e) {
-            log.error("Error occured : "+e.getMessage());
-            return ResponseEntity.badRequest().body("Error occured : "+e.getMessage());
+            log.error("Error occured : " + e.getMessage());
+            return ResponseEntity.badRequest().body("Error occured : " + e.getMessage());
         }
     }
+
     @GetMapping("/myquizzes")
     public ResponseEntity<?> getMyQuizzes(@RequestHeader("Authorization") String authHeader) {
         try {
@@ -204,7 +209,7 @@ public class QuizController {
                 return ResponseEntity.status(403).body(map);
             }
 
-            int total = quiz.getTotalQuestion();
+            int total = quiz.getTotalQuestions();
             List<Questions> existingQuestions = quiz.getQuestions();
             if (existingQuestions == null) {
                 existingQuestions = new ArrayList<>();
@@ -242,7 +247,8 @@ public class QuizController {
             return ResponseEntity.badRequest().body("Error occurred : " + e.getMessage());
         }
     }
-    @DeleteMapping("/deleteQuestion")
+
+    @DeleteMapping("/deletequestion")
     public ResponseEntity<?> deleteQuestion(
             @RequestParam String quizId,
             @RequestHeader("Authorization") String authHeader,
@@ -302,6 +308,122 @@ public class QuizController {
         }
     }
 
+    @PutMapping("/updatequiz")
+    public ResponseEntity<?> updateQuiz(
+            @RequestParam String quizId,
+            @RequestHeader("Authorization") String authHeader,
+            @RequestBody QuizDao updatedQuiz) {
+
+        Map<String, Object> map = new HashMap<>();
+        try {
+            if (authHeader == null || !authHeader.startsWith("Bearer ")) {
+                map.put("Message", "Authorization header missing or invalid");
+                return ResponseEntity.status(401).body(map);
+            }
+
+            String token = authHeader.substring(7);
+            String userId = jwtUtil.extractUserId(token);
+
+            Optional<Quiz> quizOpt = quizRepository.findById(quizId);
+            if (!quizOpt.isPresent()) {
+                map.put("Message", "Quiz not found with given ID");
+                return ResponseEntity.badRequest().body(map);
+            }
+
+            Quiz quiz = quizOpt.get();
+
+            // Owner validation
+            if (!quiz.getCreatedBy().equals(userId)) {
+                map.put("Message", "You are not authorized to update this quiz");
+                return ResponseEntity.status(403).body(map);
+            }
+
+            // Validation: startTime & endTime must exist first
+            if (updatedQuiz.getStartTime() != null && updatedQuiz.getEndTime() != null) {
+                LocalTime start = updatedQuiz.getStartTime();
+                LocalTime end = updatedQuiz.getEndTime();
+                if (end.isBefore(start) || end.equals(start)) {
+                    map.put("Message", "End time must be after start time");
+                    return ResponseEntity.badRequest().body(map);
+                }
+
+                long diffMinutes = java.time.Duration.between(start, end).toMinutes();
+                if (updatedQuiz.getDuration() * 60 > diffMinutes) {
+                    map.put("Message", "Duration cannot exceed the difference between start and end time");
+                    return ResponseEntity.badRequest().body(map);
+                }
+
+                quiz.setStartTime(start);
+                quiz.setEndTime(end);
+            } else if (updatedQuiz.getStartTime() != null && quiz.getEndTime() != null) {
+                LocalTime start = updatedQuiz.getStartTime();
+                LocalTime end = quiz.getEndTime();
+                if (end.isBefore(start) || end.equals(start)) {
+                    map.put("Message", "Start time cannot be after existing end time");
+                    return ResponseEntity.badRequest().body(map);
+                }
+
+                long diffMinutes = java.time.Duration.between(start, end).toMinutes();
+                if (updatedQuiz.getDuration() * 60 > diffMinutes) {
+                    map.put("Message", "Duration cannot exceed the difference between start and end time");
+                    return ResponseEntity.badRequest().body(map);
+                }
+
+                quiz.setStartTime(start);
+            } else if (updatedQuiz.getEndTime() != null && quiz.getStartTime() != null) {
+                LocalTime start = quiz.getStartTime();
+                LocalTime end = updatedQuiz.getEndTime();
+                if (end.isBefore(start) || end.equals(start)) {
+                    map.put("Message", "End time cannot be before existing start time");
+                    return ResponseEntity.badRequest().body(map);
+                }
+
+                long diffMinutes = java.time.Duration.between(start, end).toMinutes();
+                if (updatedQuiz.getDuration() * 60 > diffMinutes) {
+                    map.put("Message", "Duration cannot exceed the difference between start and end time");
+                    return ResponseEntity.badRequest().body(map);
+                }
+
+                quiz.setEndTime(end);
+            }
+
+            // Update other fields if provided
+            if (updatedQuiz.getQuizName() != null) quiz.setQuizName(updatedQuiz.getQuizName());
+            if (updatedQuiz.getDescription() != null) quiz.setDescription(updatedQuiz.getDescription());
+            if (updatedQuiz.getDuration() != 0) quiz.setDuration(updatedQuiz.getDuration());
+            if (updatedQuiz.getTotalQuestions() != 0) {
+                quiz.setTotalQuestions(updatedQuiz.getTotalQuestions());
+                quiz.setTotalMarks(updatedQuiz.getTotalQuestions());
+            }
+            if (updatedQuiz.getPassingPercentage() != 0) {
+                quiz.setPassingPercentage(updatedQuiz.getPassingPercentage());
+                quiz.setPassingScore((int) Math.ceil(
+                        (updatedQuiz.getPassingPercentage() / 100.0) *
+                                (updatedQuiz.getTotalQuestions() != 0 ? updatedQuiz.getTotalQuestions() : quiz.getTotalMarks())
+                ));
+            }
+            if (updatedQuiz.getQuizDate() != null) quiz.setQuizDate(updatedQuiz.getQuizDate());
+
+            quiz.setUpdatedAt(LocalDateTime.now());
+            quizRepository.save(quiz);
+
+            map.put("Message", "Quiz updated successfully");
+            map.put("quiz", quiz);
+            map.put("status", true);
+            return ResponseEntity.ok(map);
+
+        } catch (Exception e) {
+            log.error("Error occurred: " + e.getMessage());
+            map.put("Message", "Something went wrong: " + e.getMessage());
+            return ResponseEntity.badRequest().body(map);
+        }
+    }
+
+
+
+
+
+
 
     @PostMapping("/startquiz")
     public ResponseEntity<?> startquiz(@RequestParam String userId, @RequestParam String quizId) {
@@ -343,6 +465,7 @@ public class QuizController {
         return ResponseEntity.badRequest().body("Something went wrong: " + e.getMessage());
     }
 }
+
    @PostMapping("/saveanswer")
 public ResponseEntity<Map<String, Object>> saveAnswer(
         @RequestParam String attemptId,
@@ -500,37 +623,6 @@ public ResponseEntity<?> completeQuiz(@RequestParam String attemptId) {
         return ResponseEntity.badRequest().body("Something went wrong : " + e.getMessage());
     }
 }
-//    @PutMapping("/updateQuiz")
-//    public ResponseEntity<?> updateQuiz(@RequestParam String quizId, @RequestBody QuizDao updatedQuiz){
-//        try {
-//            Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-//            String email = authentication.getName();
-//            Map<String, Object> map = new HashMap<>();
-//            Optional<Quiz> quiz = quizRepository.findById(quizId);
-//            if(!quiz.isPresent()){
-//                map.put("Message", "Quiz not found");
-//                return ResponseEntity.badRequest().body(map);
-//            }
-//            if(!email.equals(quiz.get().getCreatedBy())){
-//                map.put("Message", "You cannot update this quiz because you are not its creator.");
-//                return ResponseEntity.badRequest().body(map);
-//            }
-//            quiz.get().setQuizName(updatedQuiz.getQuizName());
-//            quiz.get().setDuration(updatedQuiz.getDuration());
-//            quiz.get().setPassingScore(updatedQuiz.getPassingScore());
-//            quiz.get().setTotalMarks(updatedQuiz.getTotalMarks());
-//            quiz.get().setTotalQues(updatedQuiz.getTotalQues());
-//            quiz.get().setUpdatedAt(LocalDateTime.now());
-//            quizRepository.save(quiz.get());
-//
-//            map.put("Message", "Quiz updated successfully");
-//            return ResponseEntity.ok().body(map);
-//
-//        } catch (Exception e) {
-//            log.error("Error occured : "+e.getMessage());
-//            return ResponseEntity.badRequest().body("Something went wrong : "+e.getMessage());
-//        }
-//    }
 
     @GetMapping("/findQuiz")
     public ResponseEntity<?> findQuiz(@RequestParam String quizId){

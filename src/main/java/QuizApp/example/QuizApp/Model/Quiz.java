@@ -22,7 +22,8 @@ public class Quiz {
     private String quizName;
     private double duration;
     private String description;
-    private int totalQuestion;
+    private int totalQuestions;
+    private int totalMarks;
     private int passingScore;
     private double passingPercentage;
     private boolean active;
