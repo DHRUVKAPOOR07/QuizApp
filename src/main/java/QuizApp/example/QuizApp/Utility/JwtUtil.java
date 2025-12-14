@@ -16,7 +16,7 @@ import io.jsonwebtoken.security.Keys;
 public class JwtUtil {
 
     @Value("${jwt.secret}")
-    private String jwtSecret; // ⚠ Remove static
+    private String jwtSecret;
 
     private Key getSigningKey() {
         byte[] keyBytes = jwtSecret.getBytes(StandardCharsets.UTF_8);
@@ -43,27 +43,33 @@ public class JwtUtil {
         return extractClaim(token, claims -> claims.get("userId", String.class));
     }
 
-    public boolean validateToken(String token, UserDetails userDetails) {
-        final String extractedUsername = extractUsername(token);
-        return (extractedUsername.equals(userDetails.getUsername()) && !isTokenExpired(token));
-    }
-
-    public boolean isTokenExpired(String token) {
-        return extractClaim(token, Claims::getExpiration).before(new Date());
-    }
-
     public String extractEmail(String token) {
         return extractClaim(token, Claims::getAudience);
     }
 
-    private <T> T extractClaim(String token, ClaimsExtractor<T> claimsExtractor) {
+    public boolean validateToken(String token, UserDetails userDetails) {
+        final String username = extractUsername(token);
+        return username.equals(userDetails.getUsername()) && !isTokenExpired(token);
+    }
+
+    public boolean isTokenExpired(String token) {
+        try {
+            Date exp = extractClaim(token, Claims::getExpiration);
+            return exp == null || exp.before(new Date());
+        } catch (Exception e) {
+            return true;
+        }
+    }
+
+    private <T> T extractClaim(String token, ClaimsExtractor<T> extractor) {
         Claims claims = extractAllClaims(token);
-        return claimsExtractor.extract(claims);
+        return extractor.extract(claims);
     }
 
     private Claims extractAllClaims(String token) {
         return Jwts.parserBuilder()
                 .setSigningKey(getSigningKey())
+                .setAllowedClockSkewSeconds(300) // 5 min clock skew
                 .build()
                 .parseClaimsJws(token)
                 .getBody();

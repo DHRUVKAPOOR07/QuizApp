@@ -20,5 +20,5 @@ public class Questions {
     private List<String> options;
     private String correctOption;
     private int timeLimit;
-    
+    private String SelectedOption;
 }
