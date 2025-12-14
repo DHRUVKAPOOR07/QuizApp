@@ -2,12 +2,7 @@ package QuizApp.example.QuizApp.Controller;
 
 import java.time.LocalDateTime;
 import java.time.LocalTime;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-import java.util.UUID;
+import java.util.*;
 
 import QuizApp.example.QuizApp.Utility.JwtUtil;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -15,6 +10,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.core.parameters.P;
 import org.springframework.web.bind.annotation.*;
 
 import QuizApp.example.QuizApp.Dao.QuestionDao;
@@ -81,6 +77,7 @@ public class QuizController {
             quiz2.setDuration(quiz.getDuration());
             quiz2.setDescription(quiz.getDescription());
             quiz2.setTotalQuestions(quiz.getTotalQuestions());
+            quiz2.setDuration(quiz.getDuration());
             quiz2.setPassingScore((int) Math.ceil((quiz.getPassingPercentage()/100.0) * quiz.getTotalQuestions()));
             quiz2.setPassingPercentage(quiz.getPassingPercentage());
             quiz2.setQuizDate(quiz.getQuizDate());
@@ -129,6 +126,36 @@ public class QuizController {
             return ResponseEntity.badRequest().body(map);
         }
     }
+
+    @GetMapping("/test")
+    public ResponseEntity<?> getSingleQuiz(@RequestParam String quizId) {
+        try {
+            Map<String, Object> response = new HashMap<>();
+
+            if (quizId == null || quizId.isEmpty()) {
+                response.put("message", "quizId is required");
+                return ResponseEntity.badRequest().body(response);
+            }
+
+            Optional<Quiz> quizOpt = quizRepository.findById(quizId);
+            if (!quizOpt.isPresent()) {
+                response.put("message", "Quiz not found");
+                return ResponseEntity.badRequest().body(response);
+            }
+
+            Quiz quiz = quizOpt.get();
+            response.put("status", true);
+            response.put("quiz", quiz);
+            return ResponseEntity.ok(response);
+
+        } catch (Exception e) {
+            Map<String, Object> response = new HashMap<>();
+            response.put("status", false);
+            response.put("message", "Something went wrong: " + e.getMessage());
+            return ResponseEntity.badRequest().body(response);
+        }
+    }
+
 
     @GetMapping("/myquiz/{quizId}")
     public ResponseEntity<?> getSingleQuiz(
@@ -419,99 +446,376 @@ public class QuizController {
         }
     }
 
-
-
-
-
-
-
     @PostMapping("/startquiz")
-    public ResponseEntity<?> startquiz(@RequestParam String userId, @RequestParam String quizId) {
-    try {
-      
-        Optional<QuizAttempt> existingAttempt = 
-                quizAttemptRepository.findByUserIdAndQuizId(userId, quizId);
+    public ResponseEntity<?> startQuiz(
+            @RequestHeader("Authorization") String token,
+            @RequestParam String quizId) {
+        try {
+            Map<String, Object> response = new HashMap<>();
 
-        if (existingAttempt.isPresent()) {
-            QuizAttempt attempt = existingAttempt.get();
-            if ("IN_PROGRESS".equals(attempt.getStatus())) {
-                return ResponseEntity.ok(attempt);
-            } else if ("COMPLETED".equals(attempt.getStatus())) {
+            String jwtToken = token.startsWith("Bearer ") ? token.substring(7) : token;
+            String userId = jwtUtil.extractUserId(jwtToken);
+
+            Optional<User> userOpt = userRepository.findById(userId);
+            if (!userOpt.isPresent()) {
+                return ResponseEntity.badRequest().body("User not found");
+            }
+            User user = userOpt.get();
+
+            Optional<Quiz> quizOpt = quizRepository.findById(quizId);
+            if (!quizOpt.isPresent()) {
+                return ResponseEntity.badRequest().body("Quiz not found");
+            }
+            Quiz quiz = quizOpt.get();
+
+            LocalTime now = LocalTime.now();
+            if (quiz.getStartTime() != null && quiz.getEndTime() != null) {
+                if (now.isBefore(quiz.getStartTime())) {
+                    return ResponseEntity.badRequest().body("Quiz has not started yet.");
+                }
+                if (now.isAfter(quiz.getEndTime())) {
+                    return ResponseEntity.badRequest().body("Quiz time is over.");
+                }
+            }
+
+            Optional<QuizAttempt> existingAttemptOpt = quizAttemptRepository.findByUserIdAndQuizId(userId, quizId);
+            if (!existingAttemptOpt.isPresent()) {
+                return ResponseEntity.badRequest().body("User not registered for this quiz.");
+            }
+            QuizAttempt attempt = existingAttemptOpt.get();
+
+            // ✅ Prevent restarting a completed quiz
+            if ("COMPLETED".equalsIgnoreCase(attempt.getStatus())) {
                 return ResponseEntity.badRequest().body("Quiz already submitted. Cannot start again.");
             }
-        }
-        QuizAttempt quizAttempt = new QuizAttempt();
-        quizAttempt.setUserId(userId);
-        quizAttempt.setQuizId(quizId);
-        quizAttempt.setStatus("IN_PROGRESS");
-        quizAttempt.setMarksObtained(0);
-        quizAttempt.setAttemptedAt(LocalDateTime.now());
-        Optional<Quiz> quiz = quizRepository.findById(quizId);
-        List<String> attemptedUsers = quiz.get().getAttemptedUsersId();
-        if (attemptedUsers == null) {
-            attemptedUsers = new ArrayList<>(); 
-            attemptedUsers.add(userId);
-        }
-        else{
-            attemptedUsers.add(userId);
-        }
-        quiz.get().setAttemptedUsersId(attemptedUsers);
-        QuizAttempt savedAttempt = quizAttemptRepository.save(quizAttempt);
-        quizRepository.save(quiz.get());
-        return ResponseEntity.ok(savedAttempt);
 
-    } catch (Exception e) {
-        log.error("Error occurred: " + e.getMessage());
-        return ResponseEntity.badRequest().body("Something went wrong: " + e.getMessage());
+            if ("IN_PROGRESS".equalsIgnoreCase(attempt.getStatus())) {
+                response.put("status", true);
+                response.put("message", "Quiz already in progress");
+                response.put("attempt", attempt);
+                response.put("user", user); // add user details
+                return ResponseEntity.ok(response);
+            }
+
+            List<Questions> originalQuestions = quiz.getQuestions() != null ? quiz.getQuestions() : new ArrayList<>();
+            List<Questions> shuffledQuestions = new ArrayList<>(originalQuestions);
+            Collections.shuffle(shuffledQuestions);
+            shuffledQuestions.forEach(q -> {
+                if (q.getOptions() != null && !q.getOptions().isEmpty()) {
+                    Collections.shuffle(q.getOptions());
+                } else {
+                    q.setOptions(new ArrayList<>());
+                }
+            });
+
+            // ✅ Update attempt details
+            attempt.setStatus("IN_PROGRESS");
+            attempt.setQuizStartTime(LocalDateTime.now());
+            attempt.setShuffledQuestions(shuffledQuestions);
+
+            List<QuestionAttempt> questionAttempts = new ArrayList<>();
+            for (Questions q : shuffledQuestions) {
+                QuestionAttempt qa = new QuestionAttempt();
+                qa.setQuestionId(q.getId());
+                qa.setSelectedOption(null);
+                qa.setCorrect(false);
+                questionAttempts.add(qa);
+            }
+            attempt.setAttemptedQuestions(questionAttempts);
+            attempt.setDuration(quizOpt.get().getDuration());
+
+            QuizAttempt savedAttempt = quizAttemptRepository.save(attempt);
+
+            response.put("status", true);
+            response.put("message", "Quiz started successfully");
+            response.put("attempt", savedAttempt);
+            response.put("shuffledQuestions", shuffledQuestions);
+            response.put("user", user); // include user details
+
+            return ResponseEntity.ok(response);
+
+        } catch (Exception e) {
+            Map<String, Object> error = new HashMap<>();
+            error.put("status", false);
+            error.put("message", "Something went wrong: " + e.getMessage());
+            return ResponseEntity.badRequest().body(error);
+        }
     }
-}
 
-   @PostMapping("/saveanswer")
-public ResponseEntity<Map<String, Object>> saveAnswer(
-        @RequestParam String attemptId,
-        @RequestParam String questionId,
-        @RequestParam String selectedOption) {
 
-    Map<String, Object> response = new HashMap<>();
+    @GetMapping("/user/allQuizzes")
+    public ResponseEntity<?> getAllUserQuizzes(@RequestParam String userId) {
+        try {
+            Map<String, Object> response = new HashMap<>();
 
-    try {
-        QuizAttempt attempt = quizAttemptRepository.findById(attemptId)
-                .orElseThrow(() -> new RuntimeException("Quiz attempt not found"));
+            // ✅ Fetch user
+            Optional<User> userOpt = userRepository.findById(userId);
+            if (!userOpt.isPresent()) {
+                return ResponseEntity.badRequest().body("User not found");
+            }
 
-        List<QuestionAttempt> qAttempts = attempt.getAttemptedQuestions();
-        if (qAttempts == null) {
-            qAttempts = new ArrayList<>();
+            User user = userOpt.get();
+
+            // ✅ Attempted quizzes
+            List<String> attemptedQuizIds = user.getAttemptedQuiz();
+            List<Quiz> attemptedQuizzes = (attemptedQuizIds != null && !attemptedQuizIds.isEmpty())
+                    ? quizRepository.findAllById(attemptedQuizIds)
+                    : new ArrayList<>();
+            
+            // ✅ Created quizzes
+            List<Quiz> createdQuizzes = quizRepository.findAllByCreatedBy(userId);
+
+            // ✅ Optional: Upcoming quizzes (active & future)
+            List<Quiz> upcomingQuizzes = quizRepository.findAll().stream()
+                    .filter(q -> q.isActive() && q.getQuizDate() != null && q.getQuizDate().isAfter(LocalDateTime.now()))
+                    .toList();
+
+            // ✅ Build response
+            response.put("status", true);
+            response.put("attemptedQuizzes", attemptedQuizzes);
+            response.put("createdQuizzes", createdQuizzes);
+            response.put("upcomingQuizzes", upcomingQuizzes);
+
+            return ResponseEntity.ok(response);
+
+        } catch (Exception e) {
+            Map<String, Object> error = new HashMap<>();
+            error.put("status", false);
+            error.put("message", "Something went wrong: " + e.getMessage());
+            return ResponseEntity.badRequest().body(error);
         }
-
-        QuestionAttempt existing = qAttempts.stream()
-                .filter(q -> q.getQuestionId().equals(questionId))
-                .findFirst()
-                .orElse(null);
-
-        if (existing != null) {
-            existing.setSelectedOption(selectedOption);
-        } else {
-            QuestionAttempt newQ = new QuestionAttempt();
-            newQ.setQuestionId(questionId);
-            newQ.setSelectedOption(selectedOption);
-            qAttempts.add(newQ);
-        }
-
-        attempt.setAttemptedQuestions(qAttempts);
-        QuizAttempt updatedAttempt = quizAttemptRepository.save(attempt);
-
-        response.put("status", "success");
-        response.put("message", "Answer submitted successfully");
-        response.put("attempt", updatedAttempt);
-
-        return ResponseEntity.ok(response);
-
-    } catch (Exception e) {
-        response.put("status", "error");
-        response.put("message", "Something went wrong: " + e.getMessage());
-        return ResponseEntity.status(500).body(response);
     }
-}
+
+    @PostMapping("/registerQuiz")
+    public ResponseEntity<?> registerQuiz(
+            @RequestHeader("Authorization") String token,
+            @RequestParam String quizId) {
+        try {
+            Map<String, Object> response = new HashMap<>();
+
+            String jwtToken = token.startsWith("Bearer ") ? token.substring(7) : token;
+            String userId = jwtUtil.extractUserId(jwtToken); // Make sure your JwtUtil has this method
+
+            Optional<Quiz> quizOpt = quizRepository.findById(quizId);
+            if (!quizOpt.isPresent()) {
+                response.put("status", false);
+                response.put("message", "Quiz not found");
+                return ResponseEntity.badRequest().body(response);
+            }
+            Quiz quiz = quizOpt.get();
+
+            Optional<QuizAttempt> existingAttempt = quizAttemptRepository.findByUserIdAndQuizId(userId, quizId);
+            if (existingAttempt.isPresent()) {
+                String status = existingAttempt.get().getStatus();
+                if ("REGISTERED".equalsIgnoreCase(status)) {
+                    response.put("status", true);
+                    response.put("message", "User already registered for this quiz");
+                    response.put("attempt", existingAttempt.get());
+                    return ResponseEntity.ok(response);
+                } else {
+                    response.put("status", false);
+                    response.put("message", "User already attempted or started this quiz");
+                    return ResponseEntity.badRequest().body(response);
+                }
+            }
+
+            QuizAttempt quizAttempt = new QuizAttempt();
+            quizAttempt.setUserId(userId);
+            quizAttempt.setQuizId(quizId);
+            quizAttempt.setStatus("REGISTERED");
+            quizAttempt.setMarksObtained(0);
+            quizAttempt.setAttemptedAt(LocalDateTime.now());
+            quizAttempt.setStartTime(quiz.getStartTime());
+            quizAttempt.setEndTime(quiz.getEndTime());
+
+            QuizAttempt savedAttempt = quizAttemptRepository.save(quizAttempt);
+
+            List<String> attemptedUsers = quiz.getAttemptedUsersId();
+            if (attemptedUsers == null) attemptedUsers = new ArrayList<>();
+            if (!attemptedUsers.contains(userId)) attemptedUsers.add(userId);
+            quiz.setAttemptedUsersId(attemptedUsers);
+            quizRepository.save(quiz);
+             
+            response.put("status", true);
+            response.put("message", "User successfully registered for the quiz");
+            response.put("attempt", savedAttempt);
+            response.put("quizDetails", quiz);
+
+            return ResponseEntity.ok(response);
+
+        } catch (Exception e) {
+            Map<String, Object> error = new HashMap<>();
+            error.put("status", false);
+            error.put("message", "Something went wrong: " + e.getMessage());
+            return ResponseEntity.badRequest().body(error);
+        }
+    }
+
+
+    @GetMapping("/check")
+    public ResponseEntity<Map<String, Object>> checkIfQuizExist(
+            @RequestHeader("Authorization") String token,
+            @RequestParam String quizId) {
+
+        Map<String, Object> response = new HashMap<>();
+
+        try {
+            // Extract userId from JWT
+            String jwtToken = token.startsWith("Bearer ") ? token.substring(7) : token;
+            String userId = jwtUtil.extractUserId(jwtToken);
+
+            // Fetch quiz
+            Optional<Quiz> quizOpt = quizRepository.findById(quizId);
+            if (!quizOpt.isPresent()) {
+                response.put("status", false);
+                response.put("message", "Quiz not found");
+                return ResponseEntity.badRequest().body(response);
+            }
+
+            Quiz quiz = quizOpt.get();
+
+            // Check if user is the creator
+            boolean isCreator = quiz.getCreatedBy() != null && quiz.getCreatedBy().equals(userId);
+
+            // Fetch existing QuizAttempt
+            Optional<QuizAttempt> quizAttemptOpt = quizAttemptRepository.findByUserIdAndQuizId(userId, quizId);
+
+            if (quizAttemptOpt.isPresent()) {
+                QuizAttempt attempt = quizAttemptOpt.get();
+
+                // ✅ Corrected logic for isRegistered
+                boolean isRegistered = "REGISTERED".equalsIgnoreCase(attempt.getStatus())
+                        || "IN_PROGRESS".equalsIgnoreCase(attempt.getStatus())
+                        || "COMPLETED".equalsIgnoreCase(attempt.getStatus());
+
+                response.put("status", true);
+                response.put("isRegistered", isRegistered);
+                response.put("currentStatus", attempt.getStatus());
+                response.put("isCreator", isCreator);
+                response.put("attemptId", attempt.getId());
+                response.put("message", isRegistered
+                        ? "User already attempted or started this quiz"
+                        : "User has not registered for this quiz yet");
+
+                return ResponseEntity.ok(response);
+            } else {
+                response.put("status", true);
+                response.put("isRegistered", false);
+                response.put("currentStatus", "NONE");
+                response.put("isCreator", isCreator);
+                response.put("message", isCreator
+                        ? "User is the creator of this quiz"
+                        : "User has not registered for this quiz yet");
+                return ResponseEntity.ok(response);
+            }
+
+        } catch (Exception e) {
+            response.put("status", false);
+            response.put("message", "Something went wrong: " + e.getMessage());
+            return ResponseEntity.badRequest().body(response);
+        }
+    }
+
+
+
+    @PostMapping("/saveanswer")
+    public ResponseEntity<Map<String, Object>> saveAnswer(
+            @RequestParam String attemptId,
+            @RequestParam String questionId,
+            @RequestParam String selectedOption) {
+
+        Map<String, Object> response = new HashMap<>();
+
+        try {
+            QuizAttempt attempt = quizAttemptRepository.findById(attemptId)
+                    .orElseThrow(() -> new RuntimeException("Quiz attempt not found"));
+
+            List<QuestionAttempt> qAttempts = attempt.getAttemptedQuestions();
+            if (qAttempts == null) {
+                qAttempts = new ArrayList<>();
+            }
+
+            QuestionAttempt existing = qAttempts.stream()
+                    .filter(q -> q.getQuestionId().equals(questionId))
+                    .findFirst()
+                    .orElse(null);
+
+            if (existing != null) {
+                existing.setSelectedOption(selectedOption);
+            } else {
+                QuestionAttempt newQ = new QuestionAttempt();
+                newQ.setQuestionId(questionId);
+                newQ.setSelectedOption(selectedOption);
+                qAttempts.add(newQ);
+            }
+
+            attempt.setAttemptedQuestions(qAttempts);
+            QuizAttempt updatedAttempt = quizAttemptRepository.save(attempt);
+
+            response.put("status", "success");
+            response.put("message", "Answer submitted successfully");
+            response.put("attempt", updatedAttempt);
+
+            return ResponseEntity.ok(response);
+
+        } catch (Exception e) {
+            response.put("status", "error");
+            response.put("message", "Something went wrong: " + e.getMessage());
+            return ResponseEntity.status(500).body(response);
+        }
+    }
+
+
+    @GetMapping("/attempt")
+    public ResponseEntity<Map<String, Object>> getQuizAttempt(
+            @RequestHeader("Authorization") String token,
+            @RequestParam String quizId) {
+
+        Map<String, Object> response = new HashMap<>();
+
+        try {
+            // 🔹 Extract JWT userId from token
+            String jwtToken = token.startsWith("Bearer ") ? token.substring(7) : token;
+            String userId = jwtUtil.extractUserId(jwtToken);
+
+            // 🔹 Fetch attempt
+            Optional<QuizAttempt> attemptOpt = quizAttemptRepository.findByUserIdAndQuizId(userId, quizId);
+            if (!attemptOpt.isPresent()) {
+                response.put("status", false);
+                response.put("message", "Quiz attempt not found for given user and quiz");
+                return ResponseEntity.status(404).body(response);
+            }
+
+            QuizAttempt attempt = attemptOpt.get();
+
+            // 🔹 Fetch user details
+            Optional<User> userOpt = userRepository.findById(userId);
+            if (!userOpt.isPresent()) {
+                response.put("status", false);
+                response.put("message", "User not found");
+                return ResponseEntity.status(404).body(response);
+            }
+
+            User user = userOpt.get();
+
+            // ✅ Prepare clean response
+            response.put("status", true);
+            response.put("message", "Quiz attempt fetched successfully");
+            response.put("quizAttempt", attempt);
+            response.put("user", user);
+
+            return ResponseEntity.ok(response);
+
+        } catch (Exception e) {
+            response.put("status", false);
+            response.put("message", "Something went wrong: " + e.getMessage());
+            return ResponseEntity.badRequest().body(response);
+        }
+    }
+
+
+
+
     @PostMapping("/disturbanceDetected")
     public ResponseEntity<?> disturbanceDetected(@RequestParam String attemptId){
         try {
@@ -536,6 +840,8 @@ public ResponseEntity<Map<String, Object>> saveAnswer(
             return ResponseEntity.badRequest().body("Something went wrong : "+e.getMessage());
         }
     }
+
+
 
    @PostMapping("/completequiz")
 public ResponseEntity<?> completeQuiz(@RequestParam String attemptId) {
@@ -663,5 +969,4 @@ public ResponseEntity<?> completeQuiz(@RequestParam String attemptId) {
             return ResponseEntity.badRequest().body("Something went wrong : "+e.getMessage());
         }
     }
-
 }

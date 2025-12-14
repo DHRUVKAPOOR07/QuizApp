@@ -17,6 +17,7 @@ import QuizApp.example.QuizApp.Model.User;
 import QuizApp.example.QuizApp.Repository.UserRepository;
 import QuizApp.example.QuizApp.Utility.JwtUtil;
 import lombok.extern.slf4j.Slf4j;
+
 @RestController
 @RequestMapping("/api/user")
 @Slf4j
@@ -30,6 +31,11 @@ public class UserController {
     @Autowired
     private UserRepository userRepository;
 
+    @GetMapping("/health-check")
+    public String healthCheck(){
+        return "Everything is Working just fine";
+    }
+
     @PostMapping("/createUser")
     public ResponseEntity<?> createUser(@RequestBody UserDao user){
         try {
@@ -38,7 +44,7 @@ public class UserController {
                 map.put("Message", "Fields can't be empty");
                 return ResponseEntity.badRequest().body(map);
             }
-            
+
             Optional<User> existEmail = userRepository.findByEmail(user.getEmail());
             if(existEmail.isPresent()){
                 map.put("Message", "User already exists");
@@ -52,7 +58,6 @@ public class UserController {
             user1.setPassword(hashedPass);
             List<String> li = new ArrayList<>();
             li.add("ROLE_USER");
-            user1.setRoles(li);
 
             userRepository.save(user1);
             map.put("Message", "User created successfully");
